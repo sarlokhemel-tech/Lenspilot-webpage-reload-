@@ -5,9 +5,7 @@ on:
     - cron: "17 */12 * * *"
   workflow_dispatch:
   push:
-    branches:
-      - main
-      - master
+    branches: [main, master]
 
 permissions:
   contents: read
@@ -15,9 +13,21 @@ permissions:
 jobs:
   ping:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
+    env:
+      SPACE_URL: https://hemel24-lenspilotwebpage.hf.space/ping-7f3a9c2e1b
     steps:
-      - name: Ping Hugging Face Space
+      - name: Ping the Space
         run: |
-          curl -fsSL --max-time 90 --retry 5 --retry-delay 15 --retry-all-errors \
-            "https://hemel24-lenspilotwebpage.hf.space/" -o /dev/null
+          echo "Trigger: ${{ github.event_name }} | Time: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+          OK=0
+          for i in 1 2 3 4 5; do
+            CODE=$(curl -sL -o /tmp/body.txt --max-time 90 \
+              -H "X-Keepalive-Source: github-actions ${{ github.event_name }} run ${{ github.run_id }}" \
+              -A "KeepAlive-GitHubAction" -w "%{http_code}" "$SPACE_URL" || echo 000)
+            echo "Attempt $i: HTTP $CODE  $(cat /tmp/body.txt 2>/dev/null | head -c 200)"
+            case "$CODE" in 2*) OK=1; break;; esac
+            sleep 20
+          done
+          if [ "$OK" = "1" ]; then echo "RESULT: SUCCESS - Space answered"; else echo "RESULT: FAILED - Space did not answer"; fi
+          [ "$OK" = "1" ]
